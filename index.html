@@ -136,6 +136,32 @@
   .log-remove { background: #ffebee !important; }
   .log-reward { background: #fff8e1 !important; }
   .action-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  /* PARENT LOCK */
+  .lock-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 4000;
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+  }
+  .lock-card {
+    background: white; border-radius: 24px; padding: 28px 24px; max-width: 340px; width: 100%;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.25); text-align: center;
+  }
+  .lock-card h3 { font-weight: 900; font-size: 1.3rem; color: #7b1fa2; margin-bottom: 6px; }
+  .lock-card p { font-size: 0.9rem; color: #888; margin-bottom: 16px; }
+  .lock-card .math-question { font-size: 2rem; font-weight: 900; color: #333; margin-bottom: 16px; }
+  .lock-card input {
+    width: 120px; padding: 14px; border: 3px solid #e0e0e0; border-radius: 14px;
+    font-size: 24px; font-weight: 900; text-align: center; font-family: inherit;
+  }
+  .lock-card input:focus { outline: none; border-color: #ab47bc; }
+  .lock-card .lock-btns { display: flex; gap: 10px; justify-content: center; margin-top: 16px; }
+  .lock-card .lock-btn {
+    padding: 12px 24px; border: none; border-radius: 50px; font-weight: 800;
+    font-size: 1rem; cursor: pointer; transition: all 0.2s;
+  }
+  .lock-card .lock-btn:active { transform: scale(0.95); }
+  .lock-card .lock-submit { background: linear-gradient(135deg, #ab47bc, #7b1fa2); color: white; }
+  .lock-card .lock-cancel { background: #eee; color: #666; }
+  .lock-card .lock-error { color: #e53935; font-weight: 700; font-size: 0.85rem; margin-top: 10px; }
   .confetti-container { position: fixed; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; z-index: 1000; overflow: hidden; }
   .confetti-piece { position: absolute; opacity: 0; }
   .toast {
@@ -225,6 +251,19 @@
   </div>
 </div>
 
+<div class="lock-overlay" id="lockOverlay" style="display:none;">
+  <div class="lock-card">
+    <h3>&#128274; Parent Check</h3>
+    <p>Solve to continue:</p>
+    <div class="math-question" id="lockQuestion"></div>
+    <input type="number" id="lockAnswer" placeholder="?" inputmode="numeric">
+    <div class="lock-btns">
+      <button class="lock-btn lock-cancel" id="lockCancel">Cancel</button>
+      <button class="lock-btn lock-submit" id="lockSubmit">&#10003; Go</button>
+    </div>
+    <div class="lock-error" id="lockError"></div>
+  </div>
+</div>
 <div class="toast" id="toast"></div>
 <div class="confetti-container" id="confettiContainer"></div>
 
@@ -510,45 +549,97 @@
     setTimeout(function() { container.innerHTML = ""; }, 3000);
   }
 
+  // === PARENT LOCK ===
+  var pendingAction = null;
+  var lockAnswer = 0;
+
+  function parentCheck(callback) {
+    pendingAction = callback;
+    var a = Math.floor(Math.random() * 10) + 5;
+    var b = Math.floor(Math.random() * 10) + 3;
+    lockAnswer = a + b;
+    $("lockQuestion").textContent = a + " + " + b + " = ?";
+    $("lockAnswer").value = "";
+    $("lockError").textContent = "";
+    $("lockOverlay").style.display = "flex";
+    setTimeout(function() { $("lockAnswer").focus(); }, 100);
+  }
+
+  $("lockSubmit").addEventListener("click", function() {
+    var val = parseInt($("lockAnswer").value);
+    if (val === lockAnswer) {
+      $("lockOverlay").style.display = "none";
+      if (pendingAction) { pendingAction(); pendingAction = null; }
+    } else {
+      $("lockError").textContent = "Nope! Try again.";
+      $("lockAnswer").value = "";
+      $("lockAnswer").focus();
+    }
+  });
+
+  $("lockAnswer").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") $("lockSubmit").click();
+  });
+
+  $("lockCancel").addEventListener("click", function() {
+    $("lockOverlay").style.display = "none";
+    pendingAction = null;
+  });
+
+  // === ACTIONS (all wrapped with parent lock) ===
   $("btnAdd").addEventListener("click", function() {
-    state.count++; addLog("earn", "\u{1F7E2}", "Added a pom pom", 1);
-    showToast("\u{1F7E2} +1 Pom Pom!", "#43a047");
-    if (state.count % 5 === 0) celebrate(); saveState(); render();
+    parentCheck(function() {
+      state.count++; addLog("earn", "\u{1F7E2}", "Added a pom pom", 1);
+      showToast("\u{1F7E2} +1 Pom Pom!", "#43a047");
+      if (state.count % 5 === 0) celebrate(); saveState(); render();
+    });
   });
   $("btnRemove").addEventListener("click", function() {
-    if (state.count <= 0) { showToast("Jar is empty!", "#999"); return; }
-    state.count--; addLog("lose", "\u{1F534}", "Removed a pom pom", 1);
-    showToast("\u{1F534} \u22121 Pom Pom", "#e53935"); saveState(); render();
+    parentCheck(function() {
+      if (state.count <= 0) { showToast("Jar is empty!", "#999"); return; }
+      state.count--; addLog("lose", "\u{1F534}", "Removed a pom pom", 1);
+      showToast("\u{1F534} \u22121 Pom Pom", "#e53935"); saveState(); render();
+    });
   });
 
   function earnPom(i) {
-    var b = state.earnBehaviors[i]; if (!b) return;
-    state.count += b.value; addLog("earn", b.emoji, b.name, b.value);
-    showToast(b.emoji + " +" + b.value + " \u2014 " + b.name + "!", "#43a047");
-    if (state.count > 0 && state.count % 5 === 0) celebrate(); saveState(); render();
+    parentCheck(function() {
+      var b = state.earnBehaviors[i]; if (!b) return;
+      state.count += b.value; addLog("earn", b.emoji, b.name, b.value);
+      showToast(b.emoji + " +" + b.value + " \u2014 " + b.name + "!", "#43a047");
+      if (state.count > 0 && state.count % 5 === 0) celebrate(); saveState(); render();
+    });
   }
   function losePom(i) {
-    var b = state.loseBehaviors[i]; if (!b) return;
-    var actual = Math.min(b.value, state.count);
-    if (actual === 0) { showToast("Jar is already empty!", "#999"); return; }
-    state.count -= actual; addLog("lose", b.emoji, b.name, actual);
-    showToast(b.emoji + " \u2212" + actual + " \u2014 " + b.name, "#e53935"); saveState(); render();
+    parentCheck(function() {
+      var b = state.loseBehaviors[i]; if (!b) return;
+      var actual = Math.min(b.value, state.count);
+      if (actual === 0) { showToast("Jar is already empty!", "#999"); return; }
+      state.count -= actual; addLog("lose", b.emoji, b.name, actual);
+      showToast(b.emoji + " \u2212" + actual + " \u2014 " + b.name, "#e53935"); saveState(); render();
+    });
   }
   function redeemReward(i) {
-    var r = state.rewards[i]; if (!r || state.count < r.cost) return;
-    state.count -= r.cost; addLog("reward", r.emoji, "Redeemed: " + r.name, r.cost);
-    showToast(r.emoji + " Redeemed: " + r.name + "!", "#fb8c00"); celebrate(); saveState(); render();
+    parentCheck(function() {
+      var r = state.rewards[i]; if (!r || state.count < r.cost) return;
+      state.count -= r.cost; addLog("reward", r.emoji, "Redeemed: " + r.name, r.cost);
+      showToast(r.emoji + " Redeemed: " + r.name + "!", "#fb8c00"); celebrate(); saveState(); render();
+    });
   }
 
   $("btnUndo").addEventListener("click", function() {
-    if (state.log.length === 0) return; var last = state.log.pop();
-    if (last.type === "earn") state.count = Math.max(0, state.count - last.value);
-    else state.count += last.value;
-    showToast("\u21A9 Undone!", "#546e7a"); saveState(); render();
+    parentCheck(function() {
+      if (state.log.length === 0) return; var last = state.log.pop();
+      if (last.type === "earn") state.count = Math.max(0, state.count - last.value);
+      else state.count += last.value;
+      showToast("\u21A9 Undone!", "#546e7a"); saveState(); render();
+    });
   });
   $("btnReset").addEventListener("click", function() {
-    if (!confirm("Start a new day? This clears the log but keeps pom poms.")) return;
-    state.log = []; showToast("\u{1F504} New day! Let's go, Isla!", "#5c6bc0"); saveState(); render();
+    parentCheck(function() {
+      if (!confirm("Start a new day? This clears the log but keeps pom poms.")) return;
+      state.log = []; showToast("\u{1F504} New day! Let's go, Isla!", "#5c6bc0"); saveState(); render();
+    });
   });
 
   // === INIT ===
