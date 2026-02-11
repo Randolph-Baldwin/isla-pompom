@@ -159,41 +159,6 @@
   }
   .remove-item-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 4px 8px; opacity: 0.5; }
 
-  /* SETUP SCREEN */
-  .setup-overlay {
-    position: fixed; inset: 0; background: linear-gradient(135deg, #fce4ec 0%, #f3e5f5 30%, #e8eaf6 60%, #e0f7fa 100%);
-    z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 20px;
-    overflow-y: auto;
-  }
-  .setup-card {
-    background: white; border-radius: 24px; padding: 32px 28px; max-width: 440px; width: 100%;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.12); text-align: center;
-  }
-  .setup-card h2 { font-weight: 900; font-size: 1.5rem; color: #9c27b0; margin-bottom: 8px; }
-  .setup-card p { font-size: 0.9rem; color: #888; margin-bottom: 20px; line-height: 1.5; }
-  .setup-card input {
-    width: 100%; padding: 14px 16px; border: 2px solid #e0e0e0; border-radius: 14px;
-    font-size: 16px; font-family: inherit; margin-bottom: 12px; text-align: center;
-  }
-  .setup-card input:focus { outline: none; border-color: #ab47bc; }
-  .setup-card .setup-btn {
-    width: 100%; padding: 16px; border: none; border-radius: 50px; font-weight: 800;
-    font-size: 1.1rem; color: white; cursor: pointer;
-    background: linear-gradient(135deg, #ab47bc, #7b1fa2);
-    box-shadow: 0 4px 16px rgba(156,39,176,0.3); margin-top: 8px;
-  }
-  .setup-card .setup-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .setup-card .setup-skip {
-    display: inline-block; margin-top: 16px; font-size: 0.82rem; color: #999;
-    cursor: pointer; text-decoration: underline;
-  }
-  .setup-error { color: #e53935; font-size: 0.85rem; margin-top: 8px; display: none; }
-  .setup-step {
-    text-align: left; background: #f5f5f5; border-radius: 12px; padding: 14px 16px;
-    margin-bottom: 16px; font-size: 0.85rem; line-height: 1.6;
-  }
-  .setup-step b { color: #7b1fa2; }
-
   @media (max-width: 700px) {
     header h1 { font-size: 1.8rem; }
     .main-layout { padding: 12px; gap: 16px; }
@@ -205,27 +170,6 @@
 </style>
 </head>
 <body>
-
-<!-- SETUP SCREEN (shown if no Firebase config saved) -->
-<div class="setup-overlay" id="setupOverlay" style="display:none;">
-  <div class="setup-card">
-    <h2>&#9889; Set Up Cloud Sync</h2>
-    <p>Sync Isla's pom poms across all your devices! Follow these steps to connect to Firebase (free):</p>
-    <div class="setup-step">
-      <b>Step 1:</b> Go to <b>console.firebase.google.com</b><br>
-      <b>Step 2:</b> Click <b>"Add project"</b>, name it <b>isla-pompom</b>, click Continue (skip Analytics), click <b>Create Project</b><br>
-      <b>Step 3:</b> Click the <b>gear icon</b> (Project Settings) at top-left<br>
-      <b>Step 4:</b> Scroll down &mdash; copy the <b>Web API Key</b> and paste below<br>
-      <b>Step 5:</b> In the left menu, click <b>Build</b> &rarr; <b>Realtime Database</b> &rarr; <b>Create Database</b> &rarr; pick any location &rarr; choose <b>"Start in test mode"</b> &rarr; <b>Enable</b><br>
-      <b>Step 6:</b> Copy the <b>database URL</b> shown at the top (looks like https://isla-pompom-xxxxx.firebaseio.com) and paste below
-    </div>
-    <input type="text" id="setupApiKey" placeholder="Paste your Web API Key here">
-    <input type="text" id="setupDbUrl" placeholder="Paste your Database URL here (https://...firebaseio.com)">
-    <div class="setup-error" id="setupError"></div>
-    <button class="setup-btn" id="setupBtn" onclick="connectFirebase()">&#128279; Connect &amp; Start Syncing!</button>
-    <span class="setup-skip" onclick="skipSetup()">Skip for now (use without sync)</span>
-  </div>
-</div>
 
 <header>
   <h1>Isla's Pom Pom Jar</h1>
@@ -358,25 +302,15 @@
     }
   }
 
-  // === FIREBASE ===
-  function getFirebaseConfig() {
-    try {
-      var saved = localStorage.getItem("isla-firebase-config");
-      if (saved) return JSON.parse(saved);
-    } catch(e) {}
-    return null;
-  }
+  // === FIREBASE (hardcoded config — no setup needed) ===
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCOwb74iJFebkmzFrs3TynA_EDZJ6IXol0",
+    databaseURL: "https://isla-pompom-default-rtdb.firebaseio.com"
+  };
 
-  function saveFirebaseConfig(config) {
-    try { localStorage.setItem("isla-firebase-config", JSON.stringify(config)); } catch(e) {}
-  }
-
-  function initFirebase(config) {
+  function initFirebase() {
     try {
-      var app = firebase.initializeApp({
-        apiKey: config.apiKey,
-        databaseURL: config.dbUrl
-      });
+      var app = firebase.initializeApp(FIREBASE_CONFIG);
       var db = firebase.database();
       firebaseRef = db.ref("isla-pompom/state");
 
@@ -392,7 +326,6 @@
 
       isSynced = true;
       updateSyncBadge(true);
-      showToast("\u{1F7E2} Syncing across devices!", "#43a047");
 
       // Push current state if remote is empty
       firebaseRef.once("value", function(snapshot) {
@@ -414,48 +347,9 @@
       badge.innerHTML = "&#9679; Synced";
     } else {
       badge.className = "sync-badge sync-off";
-      badge.innerHTML = "&#9679; Not synced";
-      badge.style.cursor = "pointer";
-      badge.onclick = function() { $("setupOverlay").style.display = "flex"; };
+      badge.innerHTML = "&#9679; Offline";
     }
   }
-
-  // Setup functions (global scope for onclick)
-  window.connectFirebase = function() {
-    var apiKey = $("setupApiKey").value.trim();
-    var dbUrl = $("setupDbUrl").value.trim();
-    var errEl = $("setupError");
-
-    if (!apiKey) { errEl.style.display = "block"; errEl.textContent = "Please paste your Web API Key."; return; }
-    if (!dbUrl || !dbUrl.includes("firebaseio.com")) {
-      errEl.style.display = "block"; errEl.textContent = "Please paste a valid Database URL (should contain firebaseio.com)."; return;
-    }
-    if (!dbUrl.startsWith("https://")) dbUrl = "https://" + dbUrl;
-
-    errEl.style.display = "none";
-    $("setupBtn").disabled = true;
-    $("setupBtn").textContent = "Connecting...";
-
-    var config = { apiKey: apiKey, dbUrl: dbUrl };
-    saveFirebaseConfig(config);
-
-    try {
-      initFirebase(config);
-      setTimeout(function() {
-        $("setupOverlay").style.display = "none";
-      }, 800);
-    } catch(e) {
-      errEl.style.display = "block";
-      errEl.textContent = "Connection failed: " + e.message;
-      $("setupBtn").disabled = false;
-      $("setupBtn").textContent = "\u{1F517} Connect & Start Syncing!";
-    }
-  };
-
-  window.skipSetup = function() {
-    $("setupOverlay").style.display = "none";
-    updateSyncBadge(false);
-  };
 
   // === RENDERING ===
   function render() {
@@ -658,12 +552,7 @@
   });
 
   // === INIT ===
-  var config = getFirebaseConfig();
-  if (config && config.apiKey && config.dbUrl) {
-    initFirebase(config);
-  } else {
-    $("setupOverlay").style.display = "flex";
-  }
+  initFirebase();
 
   try { render(); } catch(e) {
     document.body.innerHTML = '<div style="padding:20px;color:red;">Error: ' + e.message + '</div>';
